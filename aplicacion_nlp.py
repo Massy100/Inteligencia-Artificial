@@ -72,7 +72,7 @@ class SentimentDataset(Dataset):
         )
         
         return {
-            'input_id': encoding['input_id'].flatten(),
+            'input_ids': encoding['input_ids'].flatten(),
             'attention_mask': encoding['attention_mask'].flatten(),
             'labels': torch.tensor(etiqueta, dtype=torch.long)
         }
@@ -123,7 +123,7 @@ def entrenar_modelo(model, train_loader, test_loader, optimizer, epocas=5):
         
         for batch_idx, batch in enumerate (tqdm(train_loader, desc='Entrenando')):
             # Mover los datos al dispositivo
-            input_id = batch['input_id'].to(device)
+            input_id = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
             
@@ -177,3 +177,125 @@ def evaluar_modelo(model, test_loader):
     
     accuracy = accuracy_score(verdaderos, predicciones)
     return accuracy
+
+# Entrenar el modelo
+train_losses, test_accuracies = entrenar_modelo(
+    model, train_dataloader, test_dataloader, optimizador, epocas=10
+)
+
+# Evaluación final detallada
+model.eval()
+all_predicciones = []
+all_verdaderos = []
+all_probabilidades = []
+
+with torch.no_grad():
+    for batch in test_dataloader:
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
+        labels = batch['labels']
+        
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
+        
+        # Obtener probabilidades con softmax
+        probabilidades = torch.nn.functional.softmax(outputs.logits, dim=1)
+        _, preds = torch.max(outputs.logits, dim=1)
+        
+        all_predicciones.extend(preds.cpu().tolist())
+        all_verdaderos.extend(labels.tolist())
+        all_probabilidades.extend(probabilidades.cpu().tolist())
+
+# Reporte de clasificación
+print("\n" + "="*50)
+print("REPORTE DE CLASIFICACIÓN")
+print("="*50)
+print(classification_report(
+    all_verdaderos, 
+    all_predicciones,
+    target_names=['Negativo', 'Positivo']
+))
+
+# Mostrar algunos ejemplos con predicciones
+print("\n" + "="*50)
+print("EJEMPLOS DE PREDICCIONES")
+print("="*50)
+indices_prueba = np.random.choice(len(X_test), size=5, replace=False)
+for idx in indices_prueba:
+    comentario = X_test[idx]
+    real = "POSITIVO" if y_test[idx] == 1 else "NEGATIVO"
+    pred = "POSITIVO" if all_predicciones[idx] == 1 else "NEGATIVO"
+    prob_pos = all_probabilidades[idx][1]
+    prob_neg = all_probabilidades[idx][0]
+    
+    print(f"\nComentario: {comentario}")
+    print(f"Real: {real}")
+    print(f"Predicción: {pred}")
+    print(f"Probabilidad Positivo: {prob_pos:.4f}")
+    print(f"Probabilidad Negativo: {prob_neg:.4f}")
+    print(f"{'_/' if real == pred else 'X'} Correcto: {real == pred}")
+    
+def predecir_sentimiento(texto, model, tokenizer, device):
+    """
+    Predice el sentimiento de un nuevo comentario
+    """
+    model.eval()
+    
+    # Tokenizar
+    encoding = tokenizer(
+        texto,
+        max_length=128,
+        padding='max_length',
+        truncation=True,
+        return_tensors='pt'
+    )
+    
+    # Mover a dispositivo
+    input_ids = encoding['input_ids'].to(device)
+    attention_mask = encoding['attention_mask'].to(device)
+    
+    # Predecir
+    with torch.no_grad():
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
+        
+        probabilidades = torch.nn.functional.softmax(outputs.logits, dim=1)
+        prediccion = torch.argmax(probabilidades, dim=1)
+        
+        prob_pos = probabilidades[0][1].item()
+        prob_neg = probabilidades[0][0].item()
+    
+    sentimiento = "POSITIVO" if prediccion.item() == 1 else "NEGATIVO"
+    confianza = max(prob_pos, prob_neg)
+    
+    return {
+        'sentimiento': sentimiento,
+        'confianza': confianza,
+        'probabilidad_positivo': prob_pos,
+        'probabilidad_negativo': prob_neg
+    }
+# Listado de comentarios nuevos
+# Probar con nuevos comentarios
+print("\n" + "="*50)
+print("PREDICCIONES EN TIEMPO REAL")
+print("="*50)
+nuevos_comentarios = [
+    "Este producto es increíble, me encantó",
+    "Una verdadera porquería, no funciona",
+    "Más o menos, podría ser mejor",
+    "Excelente atención, muy recomendable",
+    "No me gustó para nada, muy decepcionante",
+    "Recomendable"
+]
+
+for comentario in nuevos_comentarios:
+    resultado = predecir_sentimiento(comentario, model, tokenizer, device)
+    print(f"\nComentario: {comentario}")
+    print(f"Sentimiento: {resultado['sentimiento']}")
+    print(f"Confianza: {resultado['confianza']:.2%}")
+    print(f"Positivo: {resultado['probabilidad_positivo']:.2%}, "
+          f"Negativo: {resultado['probabilidad_negativo']:.2%}")
