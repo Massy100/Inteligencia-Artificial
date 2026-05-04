@@ -12,10 +12,13 @@ with mp_hands.Hands(
     min_detection_confidence=0.5) as hands:
 
     imagen = cv2.imread(ruta)
+    altura, ancho, _ = imagen.shape
+    image = cv2.flip(imagen, 1)
     imagen_rgb = cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB)
 
     resultados = hands.process(imagen_rgb)
-
+    print('Handedness:', resultados.multi_handedness)
+    
     if resultados.multi_hand_landmarks:
         for hand_landmarks in resultados.multi_hand_landmarks:
             mp_drawing.draw_landmarks(
