@@ -118,3 +118,60 @@ w = mlp.coefs_
 b = mlp.intercepts_
 print(f'Pesos de la capa oculta: {w}')
 print(f'Interceptos de la capa oculta: {b}')
+
+# realizar predicciones
+y_pred2 = mlp.predict(X_test)
+eficiencia2 = accuracy_score(y_test, y_pred2)
+print(f'Precision del MLP: {eficiencia2}')
+print('Reporte de clasificacion del MLP:')
+print(classification_report(y_test, y_pred2))
+
+# aplicacion de CNN
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv1D, MaxPool1D, BatchNormalization
+from tensorflow.keras.optimizers import Adam
+
+# reorganizacion del conjunto a #D
+X_train = X_train.reshape(614, 8, 1)
+X_test = X_test.reshape(154, 8, 1)
+
+# preparacion del modelo
+model = Sequential()
+
+model.add(Conv1D(filters=16, kernel_size=2, activation='relu', input_shape=(8,1))) 
+model.add(BatchNormalization())
+model.add(Dropout(0.2))
+
+model.add(Conv1D(filters=8, kernel_size=2, activation='relu')) 
+model.add(BatchNormalization())
+model.add(Dropout(0.2))
+
+model.add(Flatten())
+model.add(Dense(8, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(Dense(1, activation='sigmoid'))
+
+# resumen
+print(model.summary())
+
+model.compile(optimizer=Adam(learning_rate=0.0001),
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
+
+y_train = pd.to_numeric(y_train)
+y_test = pd.to_numeric(y_test)
+print(y_train.dtype)
+
+history = model.fit(X_train, y_train, epochs=35, verbose=1, validation_data=(X_test, y_test))
+
+y_pred_cnn_prob = model.predict(X_test)
+y_pred_cnn = (y_pred_cnn_prob > 0.5).astype(int)
+print(y_pred_cnn)
+print(f'Eficiencia {accuracy_score(y_test, y_pred_cnn):.4f}')
+
+eficiencia3 = accuracy_score(y_test, y_pred_cnn)
+print(f'Eficiencia del CNN: {eficiencia3}')
+print('Reporte de clasificacion:')
+print(classification_report(y_test, y_pred_cnn))
