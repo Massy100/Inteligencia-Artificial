@@ -6,30 +6,37 @@ mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
 ruta = 'manos.jpg'
+def distncia(p1, p2):
+    return math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
+# captura de la imagen desde la webcam
+cap = cv2.VideoCapture(0) # 0 = camara predeterminada
 
 # Funcion para determinar si un dedo esta levantado
-def dedo_levantado(landmarks, dedo_tip, dedo_dip, dedo_pip, dedo_mcp, umbral=0.1):
+def dedo_levantado(landmarks, dedo_tip, dedo_dip, dedo_pip, dedo_mcp):
     return (landmarks.landmark[dedo_tip].y < landmarks.landmark[dedo_dip].y and
             landmarks.landmark[dedo_dip].y < landmarks.landmark[dedo_pip].y and
             landmarks.landmark[dedo_pip].y < landmarks.landmark[dedo_mcp].y)
 
 with mp_hands.Hands(
-    static_image_mode=True,
-    max_num_hands=2,
-    min_detection_confidence=0.5) as hands:
+    static_image_mode=False, # modo dinamico (mejor para video)
+    max_num_hands=2, # numero maximo de manos a detectar
+    min_detection_confidence=0.5,
+    min_traking_confidence=0.5) as hands:
+    while cap.isOpened():
+        success, image = cap.read()
+        if not success:
+            print("No se pudo capturar la imagen")
+            continue
+        image = cv2.flip(image, 1)
+        imagen_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    imagen = cv2.imread(ruta)
-    altura, ancho, _ = imagen.shape
-    image = cv2.flip(imagen, 1)
-    imagen_rgb = cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB)
-
-    resultados = hands.process(imagen_rgb)
-    print('Handedness:', resultados.multi_handedness)
+        resultados = hands.process(imagen_rgb)
+        print('Handedness:', resultados.multi_handedness)
     
     if resultados.multi_hand_landmarks:
         for hand_landmarks in resultados.multi_hand_landmarks:
             mp_drawing.draw_landmarks(
-                imagen, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
         
             # obtener las marcas como listas
             landmarks = hand_landmarks.landmark
@@ -56,12 +63,15 @@ with mp_hands.Hands(
                 if dedo_levantado(hand_landmarks, tip, dip, pip, mcp):
                     dedos_levantados.append(nombre)
             
-            print('Dedos levantados:', dedos_levantados)
             
             # mostrar los dedos levantados en la imagen
-            cv2.putText(imagen, 'Dedos levantados: ' + ', '.join(dedos_levantados), (10, 30), 
+            cv2.putText(image, 'Dedos levantados: ' + ', '.join(dedos_levantados), (10, 30), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-    cv2.imshow('Imagen', imagen)
+            # mostrar imagen en tiempo real
+            cv2.imshow('Manos', image)
+            # salir con la tecla q
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    cv2.imshow('Imagen', image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
